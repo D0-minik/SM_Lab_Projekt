@@ -43,6 +43,11 @@
 #define BH1750_ONE_TIME_H_RES_MODE 0x20
 #define BH1750_ONE_TIME_H_RES_MODE2 0x21
 #define BH1750_ONE_TIME_L_RES_MODE 0x23
+
+#define LCD_ADDRESS (0x27 << 1)
+
+
+
 /* USER CODE END Private defines */
 
 
@@ -77,6 +82,8 @@ static void MX_TIM4_Init(void);
 
 void BH1750_init(I2C_HandleTypeDef hi2c1,uint8_t command1,HAL_StatusTypeDef BH1750_Status);
 float BH1750_read(HAL_StatusTypeDef BH1750_Status, I2C_HandleTypeDef hi2c1, uint8_t data[2]);
+
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -85,6 +92,69 @@ HAL_StatusTypeDef BH1750_Status = HAL_ERROR;
 float lux;
 uint8_t data[2];
 uint8_t command;
+
+char send[20];
+
+
+void lcd_send_cmd (char cmd)
+{
+  char data_u, data_l;
+	uint8_t data_t[4];
+	data_u = (cmd&0xf0);
+	data_l = ((cmd<<4)&0xf0);
+	data_t[0] = data_u|0x0C;  //en=1, rs=0
+	data_t[1] = data_u|0x08;  //en=0, rs=0
+	data_t[2] = data_l|0x0C;  //en=1, rs=0
+	data_t[3] = data_l|0x08;  //en=0, rs=0
+	HAL_I2C_Master_Transmit (&hi2c1, LCD_ADDRESS,(uint8_t *) data_t, 4, 100);
+}
+
+
+void lcd_send_data (char data)
+{
+	char data_u, data_l;
+	uint8_t data_t[4];
+	data_u = (data&0xf0);
+	data_l = ((data<<4)&0xf0);
+	data_t[0] = data_u|0x0D;  //en=1, rs=1
+	data_t[1] = data_u|0x09;  //en=0, rs=1
+	data_t[2] = data_l|0x0D;  //en=1, rs=1
+	data_t[3] = data_l|0x09;  //en=0, rs=1
+	HAL_I2C_Master_Transmit (&hi2c1, LCD_ADDRESS,(uint8_t *) data_t, 4, 100);
+}
+
+
+void lcd_init (void)
+{
+	// 4 bit initialisation
+	HAL_Delay(50);  // wait for >40ms
+	lcd_send_cmd (0x30);
+	HAL_Delay(5);  // wait for >4.1ms
+	lcd_send_cmd (0x30);
+	HAL_Delay(1);  // wait for >100us
+	lcd_send_cmd (0x30);
+	HAL_Delay(10);
+	lcd_send_cmd (0x20);  // 4bit mode
+	HAL_Delay(10);
+
+  // dislay initialisation
+	lcd_send_cmd (0x28); // Function set --> DL=0 (4 bit mode), N = 1 (2 line display) F = 0 (5x8 characters)
+	HAL_Delay(1);
+	lcd_send_cmd (0x08); //Display on/off control --> D=0,C=0, B=0  ---> display off
+	HAL_Delay(1);
+	lcd_send_cmd (0x01);  // clear display
+	HAL_Delay(1);
+	HAL_Delay(1);
+	lcd_send_cmd (0x06); //Entry mode set --> I/D = 1 (increment cursor) & S = 0 (no shift)
+	HAL_Delay(1);
+	lcd_send_cmd (0x0C); //Display on/off control --> D = 1, C and B = 0. (Cursor and blink, last two bits)
+}
+
+void lcd_send_string (char *str)
+{
+	while (*str) lcd_send_data (*str++);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -121,6 +191,7 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   BH1750_init(hi2c1,command,BH1750_Status);
+  lcd_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,6 +202,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  lux = BH1750_read(BH1750_Status, hi2c1, data[2]);
+	  int n = sprintf(send, "   Lux: %d ", (uint16_t)lux);
+	  lcd_send_cmd(1);
+	  lcd_send_string (send);
 	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
@@ -490,6 +564,10 @@ float BH1750_read(HAL_StatusTypeDef BH1750_Status, I2C_HandleTypeDef hi2c1, uint
 	BH1750_Status = HAL_I2C_Master_Receive(&hi2c1, BH1750_ADDRESS_L, data, 2, 100);
 	return ((data[0] << 8) | data[1]) / 1.2;
 }
+
+//prototypowe funkcje do lcd i2c
+
+
 
 /* USER CODE END 4 */
 
