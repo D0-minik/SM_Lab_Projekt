@@ -23,8 +23,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "i2c.h"
+
 #include "LCD_i2c_config.h"
 #include "LCD_i2c.h"
+
+#include "bh1750.h"
+#include "bh1750_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,20 +38,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define BH1750_ADDRESS_L (0x23 << 1) //ADDR + 'L' @see BH1750 technical note p. 10
-#define BH1750_ADDRESS_H (0x5c << 1) //ADDR + 'H' @see BH1750 technical note p. 10
-#define BH1750_POWER_DOWN 0x00
-#define BH1750_POWER_ON 0x01
-#define BH1750_RESET 0x07
-#define BH1750_CONTINOUS_H_RES_MODE 0x10
-#define BH1750_CONTINOUS_H_RES_MODE2 0x11
-#define BH1750_CONTINOUS_L_RES_MODE 0x13
-#define BH1750_ONE_TIME_H_RES_MODE 0x20
-#define BH1750_ONE_TIME_H_RES_MODE2 0x21
-#define BH1750_ONE_TIME_L_RES_MODE 0x23
-
-
-
 
 /* USER CODE END Private defines */
 
@@ -79,10 +69,6 @@ static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
-void BH1750_init(I2C_HandleTypeDef hi2c1,uint8_t command1,HAL_StatusTypeDef BH1750_Status);
-float BH1750_read(HAL_StatusTypeDef BH1750_Status, I2C_HandleTypeDef hi2c1, uint8_t data[2]);
-
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -92,7 +78,7 @@ float lux;
 uint8_t data[2];
 uint8_t command;
 
-char send[20];
+char send_line[26];
 
 
 /* USER CODE END 0 */
@@ -130,8 +116,12 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  BH1750_init(hi2c1,command,BH1750_Status);
+  HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+  BH1750_Init(&hbh1750_1);
   lcd_init(&hLCD_1);
+  HAL_Delay(10);
+  lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -141,11 +131,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  lux = BH1750_read(BH1750_Status, hi2c1, data[2]);
-	  int n = sprintf(send, "   Lux: %d ", (uint16_t)lux);
-	  lcd_send_cmd(&hLCD_1,0x1);
-	  lcd_send_string (&hLCD_1,send);
+	  lux = BH1750_ReadLux(&hbh1750_1);
+	  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
+	  lcd_clear(&hLCD_1);
+	  HAL_Delay(10);
+	  lcd_send_string (&hLCD_1,send_line,0,0);
+	  HAL_Delay(10);
+	  sprintf(send_line, "Set: %d ", (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4);
+	  lcd_send_string (&hLCD_1,send_line,1,0);
 	  HAL_Delay(1000);
+
   }
   /* USER CODE END 3 */
 }
