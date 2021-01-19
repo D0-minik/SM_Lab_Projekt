@@ -69,12 +69,14 @@ UART_HandleTypeDef huart3;
 
 HAL_StatusTypeDef BH1750_Status = HAL_ERROR;
 float lux;
+uint16_t setValue;
 uint8_t data[2];
 uint8_t command;
+uint16_t PWM=0;
 
 char send_line[26];
 char send_line_usart[50];
-
+char reciveLux[7];
 GPIO_PinState test;
 /* USER CODE END PV */
 
@@ -94,13 +96,52 @@ static void MX_TIM6_Init(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
 
 	if (htim->Instance == TIM6)
 	{
-		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+		 lux = BH1750_ReadLux(&hbh1750_1);
+		 setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
 
+		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+		if( (uint16_t)lux < setValue && PWM < 2000)
+			PWM++;
+		else if(PWM>0)
+			PWM--;
+		if(PWM<=1000)
+		{
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+		}
+		else
+		{
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
+		}
 	}
+}
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+
+	if(huart->Instance == USART3)
+	{
+		//char text[3];
+		int16_t SetLux;
+		//Przykładowa ramka: “PWM1234”
+		//strncpy(text,&reciveLux,3);
+		if(reciveLux[0]=='L' && reciveLux[1]=='U' && reciveLux[2]=='X')
+		{
+			SetLux = 1000*((int8_t)reciveLux[3]-'0')+100*((int8_t)reciveLux[4]-'0')+10*((int8_t)reciveLux[5]-'0')+1*((int8_t)reciveLux[6]-'0');
+			if(SetLux>999)SetLux=999;
+			else if(SetLux<0)SetLux=0;
+			__HAL_TIM_SET_COUNTER(&htim4, SetLux*4);
+		}
+	}
+
+
+	HAL_UART_Receive_IT(&huart3,(uint8_t*)reciveLux,7);
 }
 
 
@@ -140,7 +181,11 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+  HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_UART_Receive_IT(&huart3,(uint8_t*)reciveLux,7);
+
   BH1750_Init(&hbh1750_1);
   lcd_init(&hLCD_1);
   //HAL_Delay(10);
@@ -155,17 +200,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  lux = BH1750_ReadLux(&hbh1750_1);
 	  test = HAL_GPIO_ReadPin(LD1_GPIO_Port, LD1_Pin);
 
 	  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
 	  lcd_clear(&hLCD_1);
 	  lcd_send_string (&hLCD_1,send_line,0,0);
 	  HAL_Delay(2);
-	  sprintf(send_line, "Set: %d ", (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4);
+	  sprintf(send_line, "Set: %d ", (uint16_t)setValue);
 	  lcd_send_string (&hLCD_1,send_line,1,0);
 
-	  uint8_t n = sprintf(send_line_usart, "Lux: %d Set: %d \n", (uint16_t)lux, (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4);
+	  uint8_t n = sprintf(send_line_usart, "Lux: %d Set: %d PWM: %d \n", (uint16_t)lux, (uint16_t)  setValue, (uint16_t) PWM);
 	  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
 
 	  HAL_Delay(1000);
@@ -401,7 +445,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 10799;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 9999;
+  htim6.Init.Period = 999;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
