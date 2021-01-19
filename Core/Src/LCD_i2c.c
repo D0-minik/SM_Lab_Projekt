@@ -15,9 +15,6 @@ const uint8_t LCD_ROW_16[] = {0x00, 0x40, 0x10, 0x50};
 void lcd_init (LCD_HandleTypeDef* hLCD)
 {
 
-
-
-
 	// 4 bit initialisation
 
 	lcd_send_cmd (hLCD,0x33);  // 0011 0011
@@ -49,7 +46,7 @@ void lcd_send_cmd (LCD_HandleTypeDef* hLCD, char cmd)
 	data_t[1] = data_u|0x08;  //en=0, rs=0
 	data_t[2] = data_l|0x0C;  //en=1, rs=0
 	data_t[3] = data_l|0x08;  //en=0, rs=0
-	HAL_I2C_Master_Transmit (hLCD->I2C, LCD_ADDRESS,(uint8_t *) data_t, 4, 100);
+	HAL_I2C_Master_Transmit (hLCD->I2C, LCD_ADDRESS,(uint8_t *) data_t, 4, 10);
 }
 
 
@@ -63,18 +60,18 @@ void lcd_send_data (LCD_HandleTypeDef* hLCD, char data)
 	data_t[1] = data_u|0x09;  //en=0, rs=1
 	data_t[2] = data_l|0x0D;  //en=1, rs=1
 	data_t[3] = data_l|0x09;  //en=0, rs=1
-	HAL_I2C_Master_Transmit (hLCD->I2C, LCD_ADDRESS,(uint8_t *) data_t, 4, 100);
+	HAL_I2C_Master_Transmit (hLCD->I2C, LCD_ADDRESS,(uint8_t *) data_t, 4, 10);
 }
 
 void lcd_SetCursor(LCD_HandleTypeDef* hLCD, uint8_t row, uint8_t col)
 {
 	lcd_send_cmd(hLCD, LCD_SET_DDRAM_ADDR + LCD_ROW_16[row] + col);
+	HAL_Delay(1);
 }
 
 void lcd_send_string (LCD_HandleTypeDef* hLCD, char *str, uint8_t row, uint8_t col)
 {
 	lcd_SetCursor(hLCD,row,col);
-	HAL_Delay(1);
 	while (*str) lcd_send_data (hLCD,*str++);
 	//for(uint8_t i = 0; i < strlen(str); i++)
 	  //  lcd_send_data(hLCD, str[i]);

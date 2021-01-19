@@ -50,6 +50,16 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
+I2C_HandleTypeDef hi2c1;
+
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim6;
+
+UART_HandleTypeDef huart3;
+
+/* USER CODE BEGIN PV */
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim3;
@@ -57,28 +67,41 @@ TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart3;
 
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_TIM3_Init(void);
-static void MX_TIM4_Init(void);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
 HAL_StatusTypeDef BH1750_Status = HAL_ERROR;
 float lux;
 uint8_t data[2];
 uint8_t command;
 
 char send_line[26];
+char send_line_usart[50];
+
+GPIO_PinState test;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART3_UART_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
+static void MX_TIM6_Init(void);
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+
+	if (htim->Instance == TIM6)
+	{
+		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+
+	}
+}
 
 
 /* USER CODE END 0 */
@@ -115,13 +138,14 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
   BH1750_Init(&hbh1750_1);
   lcd_init(&hLCD_1);
-  HAL_Delay(10);
-  lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
-
+  //HAL_Delay(10);
+ // lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
+  HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,15 +156,19 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  lux = BH1750_ReadLux(&hbh1750_1);
+	  test = HAL_GPIO_ReadPin(LD1_GPIO_Port, LD1_Pin);
+
 	  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
 	  lcd_clear(&hLCD_1);
-	  HAL_Delay(10);
 	  lcd_send_string (&hLCD_1,send_line,0,0);
-	  HAL_Delay(10);
+	  HAL_Delay(2);
 	  sprintf(send_line, "Set: %d ", (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4);
 	  lcd_send_string (&hLCD_1,send_line,1,0);
-	  HAL_Delay(1000);
 
+	  uint8_t n = sprintf(send_line_usart, "Lux: %d Set: %d \n", (uint16_t)lux, (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4);
+	  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
+
+	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -210,7 +238,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-void MX_I2C1_Init(void)
+static void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
@@ -354,6 +382,44 @@ static void MX_TIM4_Init(void)
 }
 
 /**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 10799;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 9999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -372,7 +438,7 @@ static void MX_USART3_UART_Init(void)
   huart3.Init.BaudRate = 115200;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Parity = UART_PARITY_EVEN;
   huart3.Init.Mode = UART_MODE_TX_RX;
   huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart3.Init.OverSampling = UART_OVERSAMPLING_16;
