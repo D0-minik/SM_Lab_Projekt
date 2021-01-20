@@ -37,10 +37,10 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-#define PID_TS        0.01         /* Sampling Time [s]*/
-#define PID_KP        1          /* Proporcional */
-#define PID_KI        0.05         /* Integral */
-#define PID_KD        20           /* Derivative */
+#define PID_TS        0.1         /* Sampling Time [s]*/
+#define PID_KP1        0.15//0.4          /* Proporcional */
+#define PID_KI1        0.35			//0.01//0.005         /* Integral */
+#define PID_KD1        0.01//  0.000001		   //1//0.40           /* Derivative */
 
 /* USER CODE END PTD */
 
@@ -84,7 +84,7 @@ uint8_t data[2];
 uint8_t command;
 int16_t PWM = 0;
 int16_t uchyb = 0;
-int16_t PWM_raw = 0;
+float PWM_raw = 0;
 
 char send_line[26];
 char send_line_usart[50];
@@ -94,7 +94,7 @@ _Bool LCD_update=0;
 
 
 
-arm_pid_instance_f32 PID_regulator;
+arm_pid_instance_f32 PID_regulator1;
 
 /* USER CODE END PV */
 
@@ -146,15 +146,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		{
 			float luxTmp = BH1750_ReadLux(&hbh1750_1);
 			lux = (uint16_t)luxTmp;
+		}
 			setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
-		    uchyb = (int16_t)(lux - setValue);
+		    uchyb = (int16_t)(setValue - lux);
 
 		   // arm_pid_init_f32(&PID_regulator, 1 );
 
-			PWM_raw = arm_pid_f32(&PID_regulator, uchyb);
-			PWM=-PWM_raw;
-			if(PWM>2000) PWM=2000;
-			else if (PWM<0) PWM=0;
+			PWM_raw = arm_pid_f32(&PID_regulator1, uchyb);
+			PWM=(uint16_t)(PWM_raw);
+			if(PWM_raw>2000)
+				{
+				PWM=2000;
+				//arm_pid_reset_f32(&PID_regulator);
+				PID_regulator1.state[2] = 2000;
+				}
+			else if (PWM_raw<0)
+				{
+				//arm_pid_reset_f32(&PID_regulator);
+				PWM=0;
+				PID_regulator1.state[2] = 0;
+
+				}
 
 			if(PWM<=1000)
 			{
@@ -166,7 +178,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
 				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
 			}
-		}
+
 
 	}
 
@@ -246,15 +258,15 @@ int main(void)
 
   BH1750_Init(&hbh1750_1);
   lcd_init(&hLCD_1);
-  //HAL_Delay(10);
-  // lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
+  HAL_Delay(10);
+  lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
 
 
-  PID_regulator.Kp = PID_KP;
-  PID_regulator.Ki = PID_KI;// * PID_TS;
-  PID_regulator.Kd = PID_KD;// / PID_TS;
+  PID_regulator1.Kp = PID_KP1;
+  PID_regulator1.Ki = PID_KI1 * PID_TS;
+  PID_regulator1.Kd = PID_KD1 / PID_TS;
 
-  arm_pid_init_f32(&PID_regulator, 1 );
+  arm_pid_init_f32(&PID_regulator1, 1 );
 
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);

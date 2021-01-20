@@ -14,3 +14,17 @@
  + CRC
  Regulator do PWM 
  
+ 
+ 
+ 
+ Parametry PID całkiem OK
+#define PID_TS        0.1         /* Sampling Time [s]*/
+#define PID_KP1        0.5        /* Proporcional */
+#define PID_KI1        0.1        /* Integral */
+#define PID_KD1        0.00005	  /* Derivative */
+
+Parametry też ok
+#define PID_TS        0.1         /* Sampling Time [s]*/
+#define PID_KP1        0.15       /* Proporcional */
+#define PID_KI1        0.35       /* Integral */
+#define PID_KD1        0.01       /* Derivative */
