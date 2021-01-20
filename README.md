@@ -8,11 +8,20 @@
  LCD I2C - I2C1 - SCL: PB8, SDA: PD9 (D15, D14)
  LCD - TIM6 - Interupts to update LCD
  USART - USART3 115200 kbps 7bit + parity even
+ CRC-1 - Parity bit Even
  
+ 
+ Parametry Regulatora PID: 
+PID_TS         0.1        /* Sampling Time [s]*/
+PID_KP1        0.15       /* Proporcional */
+PID_KI1        0.35	      /* Integral */
+PID_KD1        0.01       /* Derivative */
+  
  TO DO: 
  
- + CRC
- Regulator do PWM 
+ 
+ Doxygen
+ 
  
  
  

@@ -37,10 +37,10 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-#define PID_TS        0.1         /* Sampling Time [s]*/
-#define PID_KP1        0.15//0.4          /* Proporcional */
-#define PID_KI1        0.35			//0.01//0.005         /* Integral */
-#define PID_KD1        0.01//  0.000001		   //1//0.40           /* Derivative */
+#define PID_TS         0.1        /* Sampling Time [s]*/
+#define PID_KP1        0.15       /* Proporcional */
+#define PID_KI1        0.35	      /* Integral */
+#define PID_KD1        0.01       /* Derivative */
 
 /* USER CODE END PTD */
 
@@ -158,7 +158,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				{
 				PWM=2000;
 				//arm_pid_reset_f32(&PID_regulator);
-				PID_regulator1.state[2] = 2000;
+				if(PID_regulator1.state[2] > 2500 )
+							PID_regulator1.state[2] = 2500;
 				}
 			else if (PWM_raw<0)
 				{
