@@ -22,6 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 #include "i2c.h"
 
 #include "LCD_i2c_config.h"
@@ -29,10 +30,17 @@
 
 #include "bh1750.h"
 #include "bh1750_config.h"
+
+#include "arm_math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
+#define PID_TS        0.01         /* Sampling Time [s]*/
+#define PID_KP        1          /* Proporcional */
+#define PID_KI        0.05         /* Integral */
+#define PID_KD        20           /* Derivative */
 
 /* USER CODE END PTD */
 
@@ -56,10 +64,12 @@ I2C_HandleTypeDef hi2c1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
 
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim3;
@@ -68,16 +78,24 @@ TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart3;
 
 HAL_StatusTypeDef BH1750_Status = HAL_ERROR;
-float lux;
+uint16_t lux;
 uint16_t setValue;
 uint8_t data[2];
 uint8_t command;
-uint16_t PWM=0;
+int16_t PWM = 0;
+int16_t uchyb = 0;
+int16_t PWM_raw = 0;
 
 char send_line[26];
 char send_line_usart[50];
 char reciveLux[7];
 GPIO_PinState test;
+_Bool LCD_update=0;
+
+
+
+arm_pid_instance_f32 PID_regulator;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,35 +106,74 @@ static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM6_Init(void);
+static void MX_TIM7_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/*
+void regulacja1()
+{
+	if( (uint16_t)lux < setValue && PWM < 2000)
+					PWM++;
+				else if(PWM>0)
+					PWM--;
+
+
+				if(PWM<=1000)
+				{
+					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
+					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+				}
+				else
+				{
+					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
+					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
+				}
+}
+*/
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 
 	if (htim->Instance == TIM6)
 	{
-		 lux = BH1750_ReadLux(&hbh1750_1);
-		 setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
-
 		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-		if( (uint16_t)lux < setValue && PWM < 2000)
-			PWM++;
-		else if(PWM>0)
-			PWM--;
-		if(PWM<=1000)
+		if(!LCD_update)
 		{
-			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
-			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+			float luxTmp = BH1750_ReadLux(&hbh1750_1);
+			lux = (uint16_t)luxTmp;
+			setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
+		    uchyb = (int16_t)(lux - setValue);
+
+		   // arm_pid_init_f32(&PID_regulator, 1 );
+
+			PWM_raw = arm_pid_f32(&PID_regulator, uchyb);
+			PWM=-PWM_raw;
+			if(PWM>2000) PWM=2000;
+			else if (PWM<0) PWM=0;
+
+			if(PWM<=1000)
+			{
+				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
+				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+			}
+			else
+			{
+				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
+				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
+			}
 		}
-		else
-		{
-			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
-			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
-		}
+
+	}
+
+	if (htim->Instance == TIM7)
+	{
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+		LCD_update=1;
 	}
 }
 
@@ -134,7 +191,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		if(reciveLux[0]=='L' && reciveLux[1]=='U' && reciveLux[2]=='X')
 		{
 			SetLux = 1000*((int8_t)reciveLux[3]-'0')+100*((int8_t)reciveLux[4]-'0')+10*((int8_t)reciveLux[5]-'0')+1*((int8_t)reciveLux[6]-'0');
-			if(SetLux>999)SetLux=999;
+			if(SetLux>3999)SetLux=3999;
 			else if(SetLux<0)SetLux=0;
 			__HAL_TIM_SET_COUNTER(&htim4, SetLux*4);
 		}
@@ -180,6 +237,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
@@ -189,8 +247,18 @@ int main(void)
   BH1750_Init(&hbh1750_1);
   lcd_init(&hLCD_1);
   //HAL_Delay(10);
- // lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
+  // lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
+
+
+  PID_regulator.Kp = PID_KP;
+  PID_regulator.Ki = PID_KI;// * PID_TS;
+  PID_regulator.Kd = PID_KD;// / PID_TS;
+
+  arm_pid_init_f32(&PID_regulator, 1 );
+
   HAL_TIM_Base_Start_IT(&htim6);
+  HAL_TIM_Base_Start_IT(&htim7);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -202,13 +270,16 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  test = HAL_GPIO_ReadPin(LD1_GPIO_Port, LD1_Pin);
 
-	  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
-	  lcd_clear(&hLCD_1);
-	  lcd_send_string (&hLCD_1,send_line,0,0);
-	  HAL_Delay(2);
-	  sprintf(send_line, "Set: %d ", (uint16_t)setValue);
-	  lcd_send_string (&hLCD_1,send_line,1,0);
-
+	  if(LCD_update)
+	  {
+		  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
+		  lcd_clear(&hLCD_1);
+		  lcd_send_string (&hLCD_1,send_line,0,0);
+		  HAL_Delay(2);
+		  sprintf(send_line, "Set: %d ", (uint16_t)setValue);
+		  lcd_send_string (&hLCD_1,send_line,1,0);
+		  LCD_update=0;
+	  }
 	  uint8_t n = sprintf(send_line_usart, "Lux: %d Set: %d PWM: %d \n", (uint16_t)lux, (uint16_t)  setValue, (uint16_t) PWM);
 	  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
 
@@ -397,7 +468,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 4000;
+  htim4.Init.Period = 16000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
@@ -460,6 +531,44 @@ static void MX_TIM6_Init(void)
   /* USER CODE BEGIN TIM6_Init 2 */
 
   /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 10799;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 9999;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
 
 }
 
@@ -597,18 +706,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void BH1750_init(I2C_HandleTypeDef hi2c1,uint8_t command,HAL_StatusTypeDef BH1750_Status)
-{
-	command = BH1750_POWER_ON;
-	BH1750_Status = HAL_I2C_Master_Transmit(&hi2c1, BH1750_ADDRESS_L, &command , 1, 100);
-	command = BH1750_CONTINOUS_H_RES_MODE;
-	BH1750_Status = HAL_I2C_Master_Transmit(&hi2c1, BH1750_ADDRESS_L, &command , 1, 100);
-}
-float BH1750_read(HAL_StatusTypeDef BH1750_Status, I2C_HandleTypeDef hi2c1, uint8_t data[2])
-{
-	BH1750_Status = HAL_I2C_Master_Receive(&hi2c1, BH1750_ADDRESS_L, data, 2, 100);
-	return ((data[0] << 8) | data[1]) / 1.2;
-}
+
 
 
 

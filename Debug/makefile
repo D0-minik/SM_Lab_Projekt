@@ -55,7 +55,7 @@ main-build: SM_Lab_Projekt.elf secondary-outputs
 
 # Tool invocations
 SM_Lab_Projekt.elf: $(OBJS) $(USER_OBJS) E:\ST\Workspace\SM_Lab_Projekt\STM32F746ZGTX_FLASH.ld
-	arm-none-eabi-gcc -o "SM_Lab_Projekt.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"E:\ST\Workspace\SM_Lab_Projekt\STM32F746ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="SM_Lab_Projekt.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "SM_Lab_Projekt.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"E:\ST\Workspace\SM_Lab_Projekt\STM32F746ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="SM_Lab_Projekt.map" -Wl,--gc-sections -static -L"C:\Users\swita\STM32Cube\Repository\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Lib\GCC" --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
