@@ -59,21 +59,14 @@
 
 /* Private variables ---------------------------------------------------------*/
 
-I2C_HandleTypeDef hi2c1;
-
-TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim4;
-TIM_HandleTypeDef htim6;
-TIM_HandleTypeDef htim7;
-
-UART_HandleTypeDef huart3;
-
 /* USER CODE BEGIN PV */
 
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
 
 UART_HandleTypeDef huart3;
 
@@ -89,12 +82,11 @@ float PWM_raw = 0;
 char send_line[26];
 char send_line_usart[50];
 char reciveLux[7];
-GPIO_PinState test;
 _Bool LCD_update=0;
 
+arm_pid_instance_f32 PID_regulator;
 
-
-arm_pid_instance_f32 PID_regulator1;
+uint32_t sendTime=0;
 
 /* USER CODE END PV */
 
@@ -114,28 +106,6 @@ static void MX_TIM7_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/*
-void regulacja1()
-{
-	if( (uint16_t)lux < setValue && PWM < 2000)
-					PWM++;
-				else if(PWM>0)
-					PWM--;
-
-
-				if(PWM<=1000)
-				{
-					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
-					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
-				}
-				else
-				{
-					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
-					__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
-				}
-}
-*/
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 
@@ -147,40 +117,36 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			float luxTmp = BH1750_ReadLux(&hbh1750_1);
 			lux = (uint16_t)luxTmp;
 		}
-			setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
-		    uchyb = (int16_t)(setValue - lux);
+		setValue = (uint16_t)__HAL_TIM_GET_COUNTER(&htim4)/4;
+		uchyb = (int16_t)(setValue - lux);
 
 		   // arm_pid_init_f32(&PID_regulator, 1 );
 
-			PWM_raw = arm_pid_f32(&PID_regulator1, uchyb);
-			PWM=(uint16_t)(PWM_raw);
-			if(PWM_raw>2000)
-				{
-				PWM=2000;
-				//arm_pid_reset_f32(&PID_regulator);
-				if(PID_regulator1.state[2] > 2500 )
-							PID_regulator1.state[2] = 2500;
-				}
-			else if (PWM_raw<0)
-				{
-				//arm_pid_reset_f32(&PID_regulator);
-				PWM=0;
-				PID_regulator1.state[2] = 0;
-
-				}
-
-			if(PWM<=1000)
-			{
-				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
-				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
-			}
-			else
-			{
-				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
-				__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
-			}
-
-
+		PWM_raw = arm_pid_f32(&PID_regulator, uchyb);
+		PWM=(uint16_t)(PWM_raw);
+		if(PWM_raw>2000)
+		{
+			PWM=2000;
+			//arm_pid_reset_f32(&PID_regulator);
+			if(PID_regulator.state[2] > 2500 )
+					PID_regulator.state[2] = 2500;
+		}
+		else if (PWM_raw<0)
+		{
+			//arm_pid_reset_f32(&PID_regulator);
+			PWM=0;
+			PID_regulator.state[2] = 0;
+		}
+		if(PWM<=1000)
+		{
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM);
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+		}
+		else
+		{
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (PWM-1000));
+		}
 	}
 
 	if (htim->Instance == TIM7)
@@ -208,12 +174,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 			else if(SetLux<0)SetLux=0;
 			__HAL_TIM_SET_COUNTER(&htim4, SetLux*4);
 		}
+		HAL_UART_Receive_IT(&huart3,(uint8_t*)reciveLux,7);
 	}
 
-
-	HAL_UART_Receive_IT(&huart3,(uint8_t*)reciveLux,7);
 }
-
 
 /* USER CODE END 0 */
 
@@ -263,14 +227,17 @@ int main(void)
   lcd_send_cmd(&hLCD_1,LCD_DISPLAY_ON_OFF_CONTROL | LCD_OPT_D);
 
 
-  PID_regulator1.Kp = PID_KP1;
-  PID_regulator1.Ki = PID_KI1 * PID_TS;
-  PID_regulator1.Kd = PID_KD1 / PID_TS;
+  PID_regulator.Kp = PID_KP1;
+  PID_regulator.Ki = PID_KI1 * PID_TS;
+  PID_regulator.Kd = PID_KD1 / PID_TS;
 
-  arm_pid_init_f32(&PID_regulator1, 1 );
+  arm_pid_init_f32(&PID_regulator, 1 );
 
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);
+
+  uint8_t n = sprintf(send_line_usart, "Lp:; Lux:; Set:; PWM:; \n");
+  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
 
   /* USER CODE END 2 */
 
@@ -279,10 +246,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
-	  test = HAL_GPIO_ReadPin(LD1_GPIO_Port, LD1_Pin);
-
 	  if(LCD_update)
 	  {
 		  sprintf(send_line, "Lux: %d ", (uint16_t)lux);
@@ -291,12 +255,12 @@ int main(void)
 		  HAL_Delay(2);
 		  sprintf(send_line, "Set: %d ", (uint16_t)setValue);
 		  lcd_send_string (&hLCD_1,send_line,1,0);
+		  uint8_t n = sprintf(send_line_usart, "%d; %d; %d; %d; \n", sendTime, (uint16_t)lux, (uint16_t)  setValue, (uint16_t) PWM);
+		  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
+		  sendTime++;
 		  LCD_update=0;
 	  }
-	  uint8_t n = sprintf(send_line_usart, "Lux: %d Set: %d PWM: %d \n", (uint16_t)lux, (uint16_t)  setValue, (uint16_t) PWM);
-	  HAL_UART_Transmit(&huart3,(uint8_t*)send_line_usart,n,100);
-
-	  HAL_Delay(1000);
+	  HAL_Delay(1);
   }
   /* USER CODE END 3 */
 }

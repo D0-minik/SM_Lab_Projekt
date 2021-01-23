@@ -1,9 +1,12 @@
-/*
- * LCD_i2c_config.h
- *
- *  Created on: 9 sty 2021
- *      Author: swita
- */
+/**
+  ******************************************************************************
+  * @file    LCD_i2c_confug.h
+  * @author  swita
+  * Created on: 9 sty 2021
+  * @brief   config file to LCD 2x16 with i2c expander.
+  *
+  ******************************************************************************
+  */
 
 #ifndef INC_LCD_I2C_CONFIG_H_
 #define INC_LCD_I2C_CONFIG_H_

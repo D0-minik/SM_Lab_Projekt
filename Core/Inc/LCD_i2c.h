@@ -5,7 +5,7 @@
   * @file    LCD_i2c.h
   * @author  swita
   * Created on: 9 sty 2021
-  * @brief   Simple HD44780 driver library for STM32F7 using code from site: https://controllerstech.com/i2c-lcd-in-stm32/
+  * @brief   Simple HD44780 with PCF8574T driver library for STM32F7 using code from site: https://controllerstech.com/i2c-lcd-in-stm32/
   *			 and AW repository (https://github.com/adrianwojcikpp/NUCLEO_F746ZG_DEMO)
   *          NOTE!: This code provides only WRITE features, no READ features.
   *
